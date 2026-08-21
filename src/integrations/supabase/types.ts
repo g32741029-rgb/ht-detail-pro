@@ -14,16 +14,240 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      blocked_dates: {
+        Row: {
+          blocked_date: string
+          created_at: string
+          id: string
+          reason: string
+        }
+        Insert: {
+          blocked_date: string
+          created_at?: string
+          id?: string
+          reason?: string
+        }
+        Update: {
+          blocked_date?: string
+          created_at?: string
+          id?: string
+          reason?: string
+        }
+        Relationships: []
+      }
+      blocked_slots: {
+        Row: {
+          blocked_date: string
+          blocked_time: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blocked_date: string
+          blocked_time: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blocked_date?: string
+          blocked_time?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      bookings: {
+        Row: {
+          admin_notes: string | null
+          booking_date: string
+          booking_time: string
+          created_at: string
+          custom_service: string | null
+          customer_name: string
+          customer_phone: string
+          id: string
+          price: number | null
+          service_id: string | null
+          service_name: string
+          status: Database["public"]["Enums"]["booking_status"]
+          updated_at: string
+          vehicle_model: string
+          vehicle_type: Database["public"]["Enums"]["vehicle_type"]
+        }
+        Insert: {
+          admin_notes?: string | null
+          booking_date: string
+          booking_time: string
+          created_at?: string
+          custom_service?: string | null
+          customer_name: string
+          customer_phone: string
+          id?: string
+          price?: number | null
+          service_id?: string | null
+          service_name: string
+          status?: Database["public"]["Enums"]["booking_status"]
+          updated_at?: string
+          vehicle_model: string
+          vehicle_type: Database["public"]["Enums"]["vehicle_type"]
+        }
+        Update: {
+          admin_notes?: string | null
+          booking_date?: string
+          booking_time?: string
+          created_at?: string
+          custom_service?: string | null
+          customer_name?: string
+          customer_phone?: string
+          id?: string
+          price?: number | null
+          service_id?: string | null
+          service_name?: string
+          status?: Database["public"]["Enums"]["booking_status"]
+          updated_at?: string
+          vehicle_model?: string
+          vehicle_type?: Database["public"]["Enums"]["vehicle_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_images: {
+        Row: {
+          category: string
+          created_at: string
+          description: string
+          id: string
+          image_url: string
+          sort_order: number
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          image_url: string
+          sort_order?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          image_url?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      services: {
+        Row: {
+          active: boolean
+          category: Database["public"]["Enums"]["vehicle_type"]
+          created_at: string
+          description: string
+          duration_minutes: number
+          id: string
+          image_url: string | null
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category: Database["public"]["Enums"]["vehicle_type"]
+          created_at?: string
+          description?: string
+          duration_minutes?: number
+          id?: string
+          image_url?: string | null
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category?: Database["public"]["Enums"]["vehicle_type"]
+          created_at?: string
+          description?: string
+          duration_minutes?: number
+          id?: string
+          image_url?: string | null
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_taken_slots: {
+        Args: { _date: string }
+        Returns: {
+          slot: string
+        }[]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      request_booking: {
+        Args: {
+          _booking_date: string
+          _booking_time: string
+          _custom_service: string
+          _customer_name: string
+          _customer_phone: string
+          _service_id: string
+          _service_name: string
+          _vehicle_model: string
+          _vehicle_type: Database["public"]["Enums"]["vehicle_type"]
+        }
+        Returns: string
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
+      booking_status:
+        | "aguardando_orcamento"
+        | "orcamento_enviado"
+        | "aguardando_confirmacao"
+        | "confirmado"
+        | "concluido"
+        | "cancelado"
+      vehicle_type: "carro" | "moto"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +374,17 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+      booking_status: [
+        "aguardando_orcamento",
+        "orcamento_enviado",
+        "aguardando_confirmacao",
+        "confirmado",
+        "concluido",
+        "cancelado",
+      ],
+      vehicle_type: ["carro", "moto"],
+    },
   },
 } as const
