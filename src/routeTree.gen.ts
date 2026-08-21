@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgendarRouteImport } from './routes/agendar'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ContatoRouteImport } from './routes/contato'
 import { Route as GaleriaRouteImport } from './routes/galeria'
 import { Route as ServicosRouteImport } from './routes/servicos'
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const AgendarRoute = AgendarRouteImport.update({
   id: '/agendar',
   path: '/agendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContatoRoute = ContatoRouteImport.update({
@@ -44,6 +50,7 @@ const ServicosRoute = ServicosRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agendar': typeof AgendarRoute
+  '/auth': typeof AuthRoute
   '/contato': typeof ContatoRoute
   '/galeria': typeof GaleriaRoute
   '/servicos': typeof ServicosRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agendar': typeof AgendarRoute
+  '/auth': typeof AuthRoute
   '/contato': typeof ContatoRoute
   '/galeria': typeof GaleriaRoute
   '/servicos': typeof ServicosRoute
@@ -59,21 +67,30 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agendar': typeof AgendarRoute
+  '/auth': typeof AuthRoute
   '/contato': typeof ContatoRoute
   '/galeria': typeof GaleriaRoute
   '/servicos': typeof ServicosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/agendar' | '/contato' | '/galeria' | '/servicos'
+  fullPaths: '/' | '/agendar' | '/auth' | '/contato' | '/galeria' | '/servicos'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/agendar' | '/contato' | '/galeria' | '/servicos'
-  id: '__root__' | '/' | '/agendar' | '/contato' | '/galeria' | '/servicos'
+  to: '/' | '/agendar' | '/auth' | '/contato' | '/galeria' | '/servicos'
+  id:
+    | '__root__'
+    | '/'
+    | '/agendar'
+    | '/auth'
+    | '/contato'
+    | '/galeria'
+    | '/servicos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgendarRoute: typeof AgendarRoute
+  AuthRoute: typeof AuthRoute
   ContatoRoute: typeof ContatoRoute
   GaleriaRoute: typeof GaleriaRoute
   ServicosRoute: typeof ServicosRoute
@@ -93,6 +110,13 @@ declare module '@tanstack/react-router' {
       path: '/agendar'
       fullPath: '/agendar'
       preLoaderRoute: typeof AgendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contato': {
@@ -122,6 +146,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgendarRoute: AgendarRoute,
+  AuthRoute: AuthRoute,
   ContatoRoute: ContatoRoute,
   GaleriaRoute: GaleriaRoute,
   ServicosRoute: ServicosRoute,
