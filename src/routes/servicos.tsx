@@ -7,7 +7,9 @@ import { Bike, Car, Clock } from "lucide-react";
 import { AppShell, SectionTitle } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDuration } from "@/lib/ht";
+
 import { servicesQuery, type Service } from "@/lib/queries";
 
 export const Route = createFileRoute("/servicos")({
