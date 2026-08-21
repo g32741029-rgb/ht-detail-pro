@@ -38,7 +38,7 @@ function Index() {
   return (
     <AppShell>
       <section className="hero-bg -mx-4 -mt-4 rounded-b-3xl px-6 pb-10 pt-10 text-center">
-        <LogoBadge size={120} />
+        <LogoBadge size={72} />
         <h1 className="mt-6 font-display text-4xl font-bold uppercase leading-tight">
           Seu veículo merece o <span className="text-gradient-red">melhor cuidado</span>
         </h1>
