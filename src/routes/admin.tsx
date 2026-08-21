@@ -46,6 +46,12 @@ type Booking = {
   admin_notes: string | null;
 };
 
+type BookingPatch = {
+  status?: Booking["status"];
+  price?: number | null;
+  admin_notes?: string | null;
+};
+
 const STATUS_ORDER = Object.keys(STATUS_LABELS);
 
 function AdminPage() {
@@ -91,7 +97,7 @@ function AdminPage() {
   };
 
   const updateBooking = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
+    mutationFn: async ({ id, patch }: { id: string; patch: BookingPatch }) => {
       const { error } = await supabase.from("bookings").update(patch).eq("id", id);
       if (error) throw error;
     },
@@ -123,7 +129,7 @@ function AdminPage() {
   });
 
   const toggleSlot = useMutation({
-    mutationFn: async ({ date, time, id }: { date: string; time: string; id?: string }) => {
+    mutationFn: async ({ date, time, id }: { date: string; time: string; id?: string | undefined }) => {
       if (id) {
         const { error } = await supabase.from("blocked_slots").delete().eq("id", id);
         if (error) throw error;
@@ -346,7 +352,7 @@ function BookingCard({
   onUpdate,
 }: {
   booking: Booking;
-  onUpdate: (patch: Record<string, unknown>) => void;
+  onUpdate: (patch: BookingPatch) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [price, setPrice] = useState(booking.price ? String(booking.price) : "");
