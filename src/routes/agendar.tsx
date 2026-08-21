@@ -116,9 +116,10 @@ function AgendarPage() {
         _customer_phone: draft.phone,
         _vehicle_type: draft.vehicleType as VehicleType,
         _vehicle_model: draft.vehicleModel,
-        _service_id: draft.serviceId,
+        _service_id: draft.serviceId as unknown as string,
         _service_name: draft.serviceName,
-        _custom_service: draft.customService || null,
+        _custom_service: (draft.customService || null) as unknown as string,
+
         _booking_date: draft.date!,
         _booking_time: draft.time!,
       });
