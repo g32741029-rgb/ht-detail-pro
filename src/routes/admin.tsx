@@ -41,18 +41,26 @@ type Booking = {
   custom_service: string | null;
   booking_date: string;
   booking_time: string;
-  status: string;
+  status: BookingStatus;
   price: number | null;
   admin_notes: string | null;
 };
 
+type BookingStatus =
+  | "aguardando_orcamento"
+  | "orcamento_enviado"
+  | "aguardando_confirmacao"
+  | "confirmado"
+  | "concluido"
+  | "cancelado";
+
 type BookingPatch = {
-  status?: Booking["status"];
+  status?: BookingStatus;
   price?: number | null;
   admin_notes?: string | null;
 };
 
-const STATUS_ORDER = Object.keys(STATUS_LABELS);
+const STATUS_ORDER = Object.keys(STATUS_LABELS) as BookingStatus[];
 
 function AdminPage() {
   const navigate = useNavigate();
