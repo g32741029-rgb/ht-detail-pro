@@ -47,6 +47,7 @@ function ServiceCard({ service }: { service: Service }) {
 
 function ServicosPage() {
   const { data, isLoading } = useQuery(servicesQuery);
+  const [activeTab, setActiveTab] = useState("carro");
   const carros = (data ?? []).filter((s) => s.category === "carro");
   const motos = (data ?? []).filter((s) => s.category === "moto");
 
@@ -64,29 +65,46 @@ function ServicosPage() {
           ))}
         </div>
       ) : (
-        <div className="space-y-8">
-          <section>
-            <h2 className="mb-3 flex items-center gap-2 font-display text-xl uppercase text-primary">
-              <Car className="size-5" /> Serviços para carros
-            </h2>
-            <div className="space-y-3">
-              {carros.map((s) => (
-                <ServiceCard key={s.id} service={s} />
-              ))}
-            </div>
-          </section>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 bg-muted p-1.5">
+            <TabsTrigger
+              value="carro"
+              className="flex items-center justify-center gap-2 rounded-md text-sm font-medium text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:font-display data-[state=active]:uppercase data-[state=active]:text-primary-foreground"
+            >
+              <Car className="size-4" /> Carros
+            </TabsTrigger>
+            <TabsTrigger
+              value="moto"
+              className="flex items-center justify-center gap-2 rounded-md text-sm font-medium text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:font-display data-[state=active]:uppercase data-[state=active]:text-primary-foreground"
+            >
+              <Bike className="size-4" /> Motos
+            </TabsTrigger>
+          </TabsList>
 
-          <section>
-            <h2 className="mb-3 flex items-center gap-2 font-display text-xl uppercase text-primary">
-              <Bike className="size-5" /> Serviços para motos
-            </h2>
+          <TabsContent value="carro" className="mt-4 animate-in fade-in-50 duration-300">
             <div className="space-y-3">
-              {motos.map((s) => (
-                <ServiceCard key={s.id} service={s} />
-              ))}
+              {carros.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Nenhum serviço para carros disponível no momento.
+                </p>
+              ) : (
+                carros.map((s) => <ServiceCard key={s.id} service={s} />)
+              )}
             </div>
-          </section>
-        </div>
+          </TabsContent>
+
+          <TabsContent value="moto" className="mt-4 animate-in fade-in-50 duration-300">
+            <div className="space-y-3">
+              {motos.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Nenhum serviço para motos disponível no momento.
+                </p>
+              ) : (
+                motos.map((s) => <ServiceCard key={s.id} service={s} />)
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
       )}
 
       <Button asChild variant="hero" size="xl" className="mt-8 w-full">
@@ -95,3 +113,4 @@ function ServicosPage() {
     </AppShell>
   );
 }
+
