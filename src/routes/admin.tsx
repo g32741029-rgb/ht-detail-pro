@@ -1,17 +1,40 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { CalendarOff, Loader2, LogOut, MessageCircle, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { CalendarOff, Loader2, Lock, LogOut, MessageCircle, Search, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, SectionTitle } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { supabase } from "@/integrations/supabase/client";
-import { ALL_SLOTS, STATUS_LABELS, formatDateBR, weekdayName } from "@/lib/ht";
-import { blockedDatesQuery, blockedSlotsQuery, bookingsQuery } from "@/lib/queries";
+import {
+  adminAvailability,
+  adminBlockDate,
+  adminBookings,
+  adminLogin,
+  adminLogout,
+  adminMe,
+  adminToggleSlot,
+  adminUnblockDate,
+  adminUpdateBooking,
+} from "@/lib/admin.functions";
+import { ALL_SLOTS, formatDateBR, toISODate, weekdayName } from "@/lib/ht";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({
@@ -21,7 +44,7 @@ export const Route = createFileRoute("/admin")({
       { title: "Painel administrativo — HT Detail" },
       {
         name: "description",
-        content: "Gerencie solicitações, orçamentos e disponibilidade da HT Detail.",
+        content: "Gerencie agendamentos, status e disponibilidade da HT Detail.",
       },
       { property: "og:title", content: "Painel administrativo — HT Detail" },
       { property: "og:description", content: "Gestão de agendamentos da HT Detail." },
@@ -41,121 +64,50 @@ type Booking = {
   custom_service: string | null;
   booking_date: string;
   booking_time: string;
-  status: BookingStatus;
+  status: string;
   price: number | null;
   admin_notes: string | null;
+  created_at?: string;
 };
 
-type BookingStatus =
-  | "aguardando_orcamento"
-  | "orcamento_enviado"
-  | "aguardando_confirmacao"
-  | "confirmado"
-  | "concluido"
-  | "cancelado";
-
-type BookingPatch = {
-  status?: BookingStatus;
-  price?: number | null;
-  admin_notes?: string | null;
+const STATUS_META: Record<string, { label: string; className: string }> = {
+  aguardando_orcamento: {
+    label: "Pendente",
+    className: "bg-amber-500/15 text-amber-400 border-amber-500/40",
+  },
+  orcamento_enviado: {
+    label: "Orçamento enviado",
+    className: "bg-orange-500/15 text-orange-400 border-orange-500/40",
+  },
+  aguardando_confirmacao: {
+    label: "Aguardando cliente",
+    className: "bg-purple-500/15 text-purple-400 border-purple-500/40",
+  },
+  confirmado: {
+    label: "Confirmado",
+    className: "bg-blue-500/15 text-blue-400 border-blue-500/40",
+  },
+  concluido: {
+    label: "Concluído",
+    className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/40",
+  },
+  cancelado: {
+    label: "Cancelado",
+    className: "bg-red-500/15 text-red-400 border-red-500/40",
+  },
+  faltou: {
+    label: "Faltou",
+    className: "bg-zinc-500/15 text-zinc-300 border-zinc-500/40",
+  },
 };
 
-const STATUS_ORDER = Object.keys(STATUS_LABELS) as BookingStatus[];
+const STATUS_ORDER = Object.keys(STATUS_META);
 
 function AdminPage() {
-  const navigate = useNavigate();
-  const [ready, setReady] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [tab, setTab] = useState<"solicitacoes" | "disponibilidade">("solicitacoes");
-  const [filter, setFilter] = useState<string>("todos");
-  const queryClient = useQueryClient();
+  const me = useServerFn(adminMe);
+  const session = useQuery({ queryKey: ["admin-session"], queryFn: () => me() });
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!active) return;
-      if (!data.user) {
-        navigate({ to: "/auth" });
-        return;
-      }
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", data.user.id)
-        .eq("role", "admin");
-      if (!active) return;
-      setIsAdmin((roles ?? []).length > 0);
-      setReady(true);
-    })();
-    return () => {
-      active = false;
-    };
-  }, [navigate]);
-
-  const { data: bookings = [] } = useQuery({ ...bookingsQuery, enabled: isAdmin });
-  const { data: blockedDates = [] } = useQuery({ ...blockedDatesQuery, enabled: isAdmin });
-  const { data: blockedSlots = [] } = useQuery({ ...blockedSlotsQuery, enabled: isAdmin });
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["bookings"] });
-    queryClient.invalidateQueries({ queryKey: ["blocked_dates"] });
-    queryClient.invalidateQueries({ queryKey: ["blocked_slots"] });
-    queryClient.invalidateQueries({ queryKey: ["taken_slots"] });
-  };
-
-  const updateBooking = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: BookingPatch }) => {
-      const { error } = await supabase.from("bookings").update(patch).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Solicitação atualizada.");
-      invalidate();
-    },
-    onError: (e: { message?: string }) => toast.error(e?.message ?? "Erro ao atualizar."),
-  });
-
-  const blockDate = useMutation({
-    mutationFn: async (date: string) => {
-      const { error } = await supabase.from("blocked_dates").insert({ blocked_date: date });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Data bloqueada.");
-      invalidate();
-    },
-    onError: (e: { message?: string }) => toast.error(e?.message ?? "Erro ao bloquear."),
-  });
-
-  const unblockDate = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("blocked_dates").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: invalidate,
-  });
-
-  const toggleSlot = useMutation({
-    mutationFn: async ({ date, time, id }: { date: string; time: string; id?: string | undefined }) => {
-      if (id) {
-        const { error } = await supabase.from("blocked_slots").delete().eq("id", id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("blocked_slots")
-          .insert({ blocked_date: date, blocked_time: time });
-        if (error) throw error;
-      }
-    },
-    onSuccess: invalidate,
-    onError: (e: { message?: string }) => toast.error(e?.message ?? "Erro ao atualizar horário."),
-  });
-
-  const [slotDate, setSlotDate] = useState("");
-  const [newBlockedDate, setNewBlockedDate] = useState("");
-
-  if (!ready) {
+  if (session.isLoading) {
     return (
       <AppShell>
         <div className="flex justify-center py-20">
@@ -165,31 +117,154 @@ function AdminPage() {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <AppShell>
-        <div className="surface-card mt-8 p-8 text-center">
-          <h1 className="font-display text-xl uppercase">Acesso restrito</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Sua conta não possui permissão de administrador.
-          </p>
-          <Button
-            variant="steel"
-            className="mt-5"
-            onClick={async () => {
-              await supabase.auth.signOut();
-              navigate({ to: "/auth" });
-            }}
-          >
-            <LogOut className="size-4" /> Sair
-          </Button>
-        </div>
-      </AppShell>
-    );
-  }
+  if (!session.data?.authenticated) return <LoginScreen onDone={() => session.refetch()} />;
 
-  const list = (bookings as Booking[]).filter((b) => filter === "todos" || b.status === filter);
-  const blockedSlotsTyped = blockedSlots as {
+  return <Dashboard onLogout={() => session.refetch()} />;
+}
+
+function LoginScreen({ onDone }: { onDone: () => void }) {
+  const login = useServerFn(adminLogin);
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const result = await login({ data: { password } });
+      if (!result.ok) {
+        toast.error("Senha incorreta.");
+        return;
+      }
+      onDone();
+    } catch {
+      toast.error("Não foi possível entrar. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AppShell>
+      <div className="mx-auto mt-10 max-w-sm text-center">
+        <h1 className="font-display text-2xl font-bold uppercase">Painel HT Detail</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Área restrita da equipe.</p>
+      </div>
+      <form onSubmit={submit} className="surface-card mx-auto mt-6 max-w-sm space-y-4 p-5">
+        <div>
+          <Label htmlFor="admin-password">Senha de acesso</Label>
+          <Input
+            id="admin-password"
+            type="password"
+            required
+            autoComplete="current-password"
+            className="mt-2"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <Button type="submit" variant="hero" size="lg" className="w-full" disabled={loading}>
+          {loading ? <Loader2 className="size-4 animate-spin" /> : <Lock className="size-4" />}
+          Entrar
+        </Button>
+      </form>
+    </AppShell>
+  );
+}
+
+function Dashboard({ onLogout }: { onLogout: () => void }) {
+  const queryClient = useQueryClient();
+  const listFn = useServerFn(adminBookings);
+  const availabilityFn = useServerFn(adminAvailability);
+  const updateFn = useServerFn(adminUpdateBooking);
+  const blockDateFn = useServerFn(adminBlockDate);
+  const unblockDateFn = useServerFn(adminUnblockDate);
+  const toggleSlotFn = useServerFn(adminToggleSlot);
+  const logoutFn = useServerFn(adminLogout);
+
+  const [tab, setTab] = useState<"hoje" | "proximos" | "historico" | "disponibilidade">("hoje");
+  const [search, setSearch] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [detail, setDetail] = useState<Booking | null>(null);
+
+  const bookings = useQuery({
+    queryKey: ["admin-bookings"],
+    queryFn: async () => (await listFn()) as Booking[],
+  });
+  const availability = useQuery({
+    queryKey: ["admin-availability"],
+    queryFn: () => availabilityFn(),
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-bookings"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-availability"] });
+    queryClient.invalidateQueries({ queryKey: ["taken_slots"] });
+    queryClient.invalidateQueries({ queryKey: ["blocked_dates"] });
+  };
+
+  const update = useMutation({
+    mutationFn: (data: {
+      id: string;
+      status?: string;
+      price?: number | null;
+      admin_notes?: string | null;
+    }) => updateFn({ data }),
+    onSuccess: () => {
+      toast.success("Agendamento atualizado.");
+      invalidate();
+    },
+    onError: (e: { message?: string }) => toast.error(e?.message ?? "Erro ao atualizar."),
+  });
+
+  const blockDate = useMutation({
+    mutationFn: (date: string) => blockDateFn({ data: { date } }),
+    onSuccess: () => {
+      toast.success("Data bloqueada.");
+      invalidate();
+    },
+    onError: (e: { message?: string }) => toast.error(e?.message ?? "Erro ao bloquear."),
+  });
+
+  const unblockDate = useMutation({
+    mutationFn: (id: string) => unblockDateFn({ data: { id } }),
+    onSuccess: invalidate,
+  });
+
+  const toggleSlot = useMutation({
+    mutationFn: (data: { date: string; time: string; id?: string | null }) =>
+      toggleSlotFn({ data }),
+    onSuccess: invalidate,
+    onError: (e: { message?: string }) => toast.error(e?.message ?? "Erro ao atualizar horário."),
+  });
+
+  const today = toISODate(new Date());
+  const all = bookings.data ?? [];
+
+  const lists = useMemo(() => {
+    const byTime = (a: Booking, b: Booking) =>
+      `${a.booking_date} ${a.booking_time}`.localeCompare(`${b.booking_date} ${b.booking_time}`);
+    const hoje = all.filter((b) => b.booking_date === today).sort(byTime);
+    let proximos = all.filter((b) => b.booking_date > today).sort(byTime);
+    if (from) proximos = proximos.filter((b) => b.booking_date >= from);
+    if (to) proximos = proximos.filter((b) => b.booking_date <= to);
+    const term = search.trim().toLowerCase();
+    const digits = term.replace(/\D/g, "");
+    const historico = all.filter((b) => {
+      if (!term) return true;
+      return (
+        b.customer_name.toLowerCase().includes(term) ||
+        (digits.length > 0 && b.customer_phone.replace(/\D/g, "").includes(digits))
+      );
+    });
+    return { hoje, proximos, historico };
+  }, [all, today, from, to, search]);
+
+  const [slotDate, setSlotDate] = useState("");
+  const [newBlockedDate, setNewBlockedDate] = useState("");
+  const blockedDates = (availability.data?.dates ?? []) as { id: string; blocked_date: string }[];
+  const blockedSlots = (availability.data?.slots ?? []) as {
     id: string;
     blocked_date: string;
     blocked_time: string;
@@ -198,24 +273,26 @@ function AdminPage() {
   return (
     <AppShell>
       <div className="flex items-start justify-between">
-        <SectionTitle title="Painel" subtitle="Gerencie solicitações e disponibilidade." />
+        <SectionTitle title="Painel" subtitle="Agendamentos, status e disponibilidade." />
         <Button
           variant="ghost"
           size="icon"
           aria-label="Sair"
           onClick={async () => {
-            await supabase.auth.signOut();
-            navigate({ to: "/auth" });
+            await logoutFn({});
+            onLogout();
           }}
         >
           <LogOut className="size-5" />
         </Button>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-2">
+      <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
         {(
           [
-            ["solicitacoes", "Solicitações"],
+            ["hoje", "Hoje"],
+            ["proximos", "Próximos"],
+            ["historico", "Histórico"],
             ["disponibilidade", "Disponibilidade"],
           ] as const
         ).map(([key, label]) => (
@@ -224,7 +301,7 @@ function AdminPage() {
             type="button"
             onClick={() => setTab(key)}
             className={cn(
-              "rounded-xl border border-border bg-secondary py-2.5 text-sm font-semibold transition-smooth",
+              "shrink-0 rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm font-semibold transition-smooth",
               tab === key && "border-primary bg-primary text-primary-foreground",
             )}
           >
@@ -233,39 +310,71 @@ function AdminPage() {
         ))}
       </div>
 
-      {tab === "solicitacoes" && (
-        <>
-          <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-2">
-            {["todos", ...STATUS_ORDER].map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setFilter(s)}
-                className={cn(
-                  "shrink-0 rounded-full border border-border bg-secondary px-3 py-1.5 text-[11px] font-semibold transition-smooth",
-                  filter === s && "border-primary bg-primary text-primary-foreground",
-                )}
-              >
-                {s === "todos" ? "Todos" : STATUS_LABELS[s]?.label}
-              </button>
-            ))}
-          </div>
+      {bookings.isLoading && tab !== "disponibilidade" ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="size-6 animate-spin text-primary" />
+        </div>
+      ) : null}
 
-          {list.length === 0 ? (
-            <p className="surface-card p-8 text-center text-sm text-muted-foreground">
-              Nenhuma solicitação neste filtro.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {list.map((b) => (
-                <BookingCard
-                  key={b.id}
-                  booking={b}
-                  onUpdate={(patch) => updateBooking.mutate({ id: b.id, patch })}
-                />
-              ))}
+      {tab === "hoje" && (
+        <BookingTable
+          rows={lists.hoje}
+          empty="Nenhum agendamento para hoje."
+          onStatus={(id, status) => update.mutate({ id, status })}
+          onDetail={setDetail}
+        />
+      )}
+
+      {tab === "proximos" && (
+        <>
+          <div className="surface-card mb-3 grid grid-cols-2 gap-2 p-3">
+            <div>
+              <Label htmlFor="from">De</Label>
+              <Input
+                id="from"
+                type="date"
+                className="mt-1"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
             </div>
-          )}
+            <div>
+              <Label htmlFor="to">Até</Label>
+              <Input
+                id="to"
+                type="date"
+                className="mt-1"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </div>
+          </div>
+          <BookingTable
+            rows={lists.proximos}
+            empty="Nenhum agendamento futuro no período."
+            onStatus={(id, status) => update.mutate({ id, status })}
+            onDetail={setDetail}
+          />
+        </>
+      )}
+
+      {tab === "historico" && (
+        <>
+          <div className="relative mb-3">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Buscar por nome ou telefone"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <BookingTable
+            rows={lists.historico}
+            empty="Nenhum registro encontrado."
+            onStatus={(id, status) => update.mutate({ id, status })}
+            onDetail={setDetail}
+          />
         </>
       )}
 
@@ -290,7 +399,7 @@ function AdminPage() {
               </Button>
             </div>
             <div className="space-y-2">
-              {(blockedDates as { id: string; blocked_date: string }[]).map((d) => (
+              {blockedDates.map((d) => (
                 <div
                   key={d.id}
                   className="flex items-center justify-between rounded-lg bg-secondary px-3 py-2 text-sm"
@@ -323,7 +432,7 @@ function AdminPage() {
             {slotDate ? (
               <div className="grid grid-cols-4 gap-2">
                 {ALL_SLOTS.map((slot) => {
-                  const found = blockedSlotsTyped.find(
+                  const found = blockedSlots.find(
                     (s) => s.blocked_date === slotDate && s.blocked_time.slice(0, 5) === slot,
                   );
                   return (
@@ -331,7 +440,7 @@ function AdminPage() {
                       key={slot}
                       type="button"
                       onClick={() =>
-                        toggleSlot.mutate({ date: slotDate, time: slot, id: found?.id })
+                        toggleSlot.mutate({ date: slotDate, time: slot, id: found?.id ?? null })
                       }
                       className={cn(
                         "rounded-xl border border-border bg-secondary py-2.5 text-sm font-semibold transition-smooth",
@@ -351,116 +460,175 @@ function AdminPage() {
           </div>
         </div>
       )}
+
+      <DetailDialog
+        booking={detail}
+        onClose={() => setDetail(null)}
+        onSave={(patch) => {
+          if (!detail) return;
+          update.mutate({ id: detail.id, ...patch });
+          setDetail(null);
+        }}
+      />
     </AppShell>
   );
 }
 
-function BookingCard({
-  booking,
-  onUpdate,
+function StatusSelect({
+  value,
+  onChange,
 }: {
-  booking: Booking;
-  onUpdate: (patch: BookingPatch) => void;
+  value: string;
+  onChange: (status: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [price, setPrice] = useState(booking.price ? String(booking.price) : "");
-  const [notes, setNotes] = useState(booking.admin_notes ?? "");
-  const status = STATUS_LABELS[booking.status];
-  const phoneDigits = booking.customer_phone.replace(/\D/g, "");
+  const meta = STATUS_META[value];
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger
+        className={cn("h-8 w-[150px] border text-xs font-semibold", meta?.className)}
+        aria-label="Alterar status"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {STATUS_ORDER.map((s) => (
+          <SelectItem key={s} value={s} className="text-xs">
+            {STATUS_META[s]?.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function BookingTable({
+  rows,
+  empty,
+  onStatus,
+  onDetail,
+}: {
+  rows: Booking[];
+  empty: string;
+  onStatus: (id: string, status: string) => void;
+  onDetail: (booking: Booking) => void;
+}) {
+  if (rows.length === 0) {
+    return <p className="surface-card p-8 text-center text-sm text-muted-foreground">{empty}</p>;
+  }
 
   return (
-    <div className="surface-card p-4">
-      <button type="button" className="w-full text-left" onClick={() => setOpen(!open)}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="font-display text-lg uppercase">{booking.customer_name}</h3>
-            <p className="text-sm text-muted-foreground">
-              {booking.service_name} · {booking.vehicle_model}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {weekdayName(booking.booking_date)}, {formatDateBR(booking.booking_date)} às{" "}
-              {booking.booking_time.slice(0, 5)}
-            </p>
+    <div className="space-y-3">
+      {rows.map((b) => (
+        <div key={b.id} className="surface-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate font-display text-lg uppercase">{b.customer_name}</h3>
+              <p className="truncate text-sm text-muted-foreground">
+                {b.service_name} · {b.vehicle_model}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{b.customer_phone}</p>
+              <p className="text-xs text-muted-foreground">
+                {weekdayName(b.booking_date)}, {formatDateBR(b.booking_date)} às{" "}
+                {b.booking_time.slice(0, 5)}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <StatusSelect value={b.status} onChange={(status) => onStatus(b.id, status)} />
+              <Button variant="steel" size="sm" onClick={() => onDetail(b)}>
+                Detalhes
+              </Button>
+            </div>
           </div>
-          <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-[11px]">
-            {status?.emoji} {status?.label}
-          </span>
         </div>
-      </button>
+      ))}
+    </div>
+  );
+}
 
-      {open && (
-        <div className="mt-4 space-y-3 border-t border-border pt-4">
-          {booking.custom_service ? (
-            <p className="text-xs text-muted-foreground">
-              Descrição do cliente: {booking.custom_service}
+function DetailDialog({
+  booking,
+  onClose,
+  onSave,
+}: {
+  booking: Booking | null;
+  onClose: () => void;
+  onSave: (patch: { price: number | null; admin_notes: string | null }) => void;
+}) {
+  const [price, setPrice] = useState("");
+  const [notes, setNotes] = useState("");
+  const [loadedId, setLoadedId] = useState<string | null>(null);
+
+  if (booking && booking.id !== loadedId) {
+    setLoadedId(booking.id);
+    setPrice(booking.price ? String(booking.price) : "");
+    setNotes(booking.admin_notes ?? "");
+  }
+
+  const phoneDigits = booking?.customer_phone.replace(/\D/g, "") ?? "";
+
+  return (
+    <Dialog open={Boolean(booking)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="font-display uppercase">{booking?.customer_name}</DialogTitle>
+        </DialogHeader>
+        {booking ? (
+          <div className="space-y-3 text-sm">
+            <p className="text-muted-foreground">
+              {booking.service_name} · {booking.vehicle_type} · {booking.vehicle_model}
             </p>
-          ) : null}
-          <p className="text-sm">Telefone: {booking.customer_phone}</p>
+            <p>
+              {formatDateBR(booking.booking_date)} às {booking.booking_time.slice(0, 5)}
+            </p>
+            <p>Telefone: {booking.customer_phone}</p>
+            {booking.custom_service ? (
+              <p className="text-muted-foreground">Observações do cliente: {booking.custom_service}</p>
+            ) : null}
 
-          <div className="flex flex-wrap gap-2">
-            {STATUS_ORDER.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => onUpdate({ status: s })}
-                className={cn(
-                  "rounded-full border border-border bg-secondary px-3 py-1.5 text-[11px] font-semibold transition-smooth",
-                  booking.status === s && "border-primary bg-primary text-primary-foreground",
-                )}
-              >
-                {STATUS_LABELS[s]?.emoji} {STATUS_LABELS[s]?.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label htmlFor={`price-${booking.id}`}>Valor (R$)</Label>
+              <Label htmlFor="detail-price">Valor (R$)</Label>
               <Input
-                id={`price-${booking.id}`}
+                id="detail-price"
                 inputMode="decimal"
                 className="mt-1"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
               />
             </div>
-            <div className="flex items-end">
-              <Button
-                className="w-full"
-                onClick={() =>
-                  onUpdate({
-                    price: price.trim() ? Number(price.replace(",", ".")) : null,
-                    admin_notes: notes.trim() || null,
-                  })
-                }
-              >
-                Salvar
-              </Button>
+            <div>
+              <Label htmlFor="detail-notes">Observações internas</Label>
+              <Textarea
+                id="detail-notes"
+                className="mt-1"
+                maxLength={500}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
             </div>
-          </div>
 
-          <div>
-            <Label htmlFor={`notes-${booking.id}`}>Observações internas</Label>
-            <Textarea
-              id={`notes-${booking.id}`}
-              className="mt-1"
-              maxLength={500}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-
-          <Button asChild variant="steel" className="w-full">
-            <a
-              href={`https://wa.me/55${phoneDigits.replace(/^55/, "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Button
+              className="w-full"
+              onClick={() =>
+                onSave({
+                  price: price.trim() ? Number(price.replace(",", ".")) : null,
+                  admin_notes: notes.trim() || null,
+                })
+              }
             >
-              <MessageCircle className="size-4" /> Falar com o cliente
-            </a>
-          </Button>
-        </div>
-      )}
-    </div>
+              Salvar
+            </Button>
+            <Button asChild variant="steel" className="w-full">
+              <a
+                href={`https://wa.me/55${phoneDigits.replace(/^55/, "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <MessageCircle className="size-4" /> Falar com o cliente
+              </a>
+            </Button>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
