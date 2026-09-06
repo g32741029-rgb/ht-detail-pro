@@ -247,6 +247,7 @@ export type Database = {
         | "confirmado"
         | "concluido"
         | "cancelado"
+        | "faltou"
       vehicle_type: "carro" | "moto"
     }
     CompositeTypes: {
@@ -383,6 +384,7 @@ export const Constants = {
         "confirmado",
         "concluido",
         "cancelado",
+        "faltou",
       ],
       vehicle_type: ["carro", "moto"],
     },
